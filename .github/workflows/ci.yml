@@ -1,0 +1,56 @@
+name: Verificar CertifyHub
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci && npm run typecheck && npm run build
+        working-directory: frontend
+      - name: Iniciar la aplicación
+        env:
+          POSTGRES_DB: certifyhub
+          POSTGRES_USER: certifyhub
+          POSTGRES_PASSWORD: ${{ github.run_id }}-ci-temporal
+        run: docker compose up -d --build --wait
+      - name: Verificar el flujo completo
+        shell: bash
+        run: |
+          curl -fsS --retry 20 --retry-connrefused --retry-delay 1 http://localhost:8000/health
+          curl -fsS --retry 20 --retry-connrefused --retry-delay 1 http://localhost:3000/ | grep -F 'Aún no hay ningún informe' > /dev/null
+          curl -fsS http://localhost:8000/diagnostics -H 'Content-Type: application/json' \
+            -d '{"windows_build":"26100","logical_processors":8,"memory_bytes":17179869184,"system_disk_free_bytes":45097156608,"inventory":{"cpu":"Procesador de prueba","ram_installed":17179869184,"update_status":"complete","update_count":0}}'
+          curl -fsS http://localhost:3000/ | grep -F '26100' > /dev/null
+          curl -fsS http://localhost:3000/ | grep -F 'Recomendaciones' > /dev/null
+      - name: Probar la API contra PostgreSQL
+        run: |
+          docker compose exec -T db createdb -U certifyhub certifyhub_test
+          docker compose run --rm --user root -e PGDATABASE=certifyhub_test -v "$PWD/backend/tests:/app/tests:ro" api sh -c "pip install 'pytest>=8,<10' 'httpx2>=2,<3' && python -m pytest -q"
+        env:
+          POSTGRES_DB: certifyhub
+          POSTGRES_USER: certifyhub
+          POSTGRES_PASSWORD: ${{ github.run_id }}-ci-temporal
+  agent:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: powershell
+        run: |
+          $report = powershell -NoProfile -ExecutionPolicy RemoteSigned -File ./agent/Invoke-CertifyHubDiagnostic.ps1 | ConvertFrom-Json
+          if (@($report.PSObject.Properties).Count -ne 5 -or -not $report.inventory.cpu -or
+              ($null -ne $report.inventory.bitlocker_active -and $report.inventory.bitlocker_active -isnot [bool]) -or
+              $report.windows_build -notmatch '^\d+$' -or $report.logical_processors -lt 1 -or
+              $report.memory_bytes -lt 1 -or $report.system_disk_free_bytes -lt 0) {
+            throw 'Informe invalido'
+          }
