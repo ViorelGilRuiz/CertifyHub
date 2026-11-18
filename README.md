@@ -33,11 +33,20 @@ El primer comando del agente imprime el informe. El segundo lo envía a la API l
 
 Si algún puerto está ocupado, cambia `WEB_PORT` o `API_PORT` en `.env` y usa los puertos elegidos en el navegador y en las consultas. Si cambias el puerto de la API, añade `-PuertoApi <puerto>` al comando del agente que incluye `-Enviar`.
 
+El panel incluye el resumen de Windows, BIOS, TPM, CPU, memoria, discos y gráficos. La comprobación de Windows 11 es parcial. Usa [Comprobación de estado del PC de Microsoft](https://www.microsoft.com/windows/windows-11-specifications) para validar elegibilidad, incluido el modelo del procesador y los requisitos gráficos.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\agent\Invoke-CertifyHubDiagnostic.ps1 -Enviar -BuscarActualizaciones
+powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\agent\Invoke-CertifyHubDiagnostic.ps1 -ExportarMsinfo .\equipo.nfo
+```
+
+La búsqueda consulta el servicio de Windows Update configurado en el equipo durante un máximo de 40 segundos. El agente consulta las actualizaciones y el reinicio pendiente sin instalar actualizaciones. El archivo NFO queda local y se abre con MSINFO32. Puede contener identificadores del equipo y datos de red.
+
 PostgreSQL inicializa la base y el usuario al crear el volumen por primera vez. La API crea la tabla `diagnostics` al arrancar. El volumen conserva los informes al ejecutar `docker compose down`. Editar las variables de PostgreSQL después de inicializar el volumen requiere cambiar la configuración de la base existente.
 
 ## Arquitectura
 
-- `agent/` consulta las cuatro métricas mediante CIM y las serializa como JSON.
+- `agent/` reúne métricas e inventario mediante CIM, datos de firmware y Windows Update, y los serializa como JSON.
 - `backend/app/` valida el informe, persiste las métricas en PostgreSQL y sirve el estado y el último registro.
 - `frontend/app/` consulta la API desde el servidor Next.js y muestra el informe, el estado inicial o un fallo de conexión.
 - `compose.yaml` conecta los servicios. Los puertos publicados quedan en la interfaz local y PostgreSQL permanece en la red interna de Compose.

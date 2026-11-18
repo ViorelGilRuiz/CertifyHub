@@ -59,3 +59,31 @@ def test_database_unavailable(monkeypatch):
 
     monkeypatch.setattr(storage, "latest", unavailable)
     assert TestClient(app).get("/health").status_code == 503
+
+
+def test_inventory_is_optional_and_validated(client):
+    metrics = {
+        "windows_build": "26100",
+        "logical_processors": 8,
+        "memory_bytes": 16 * 2**30,
+        "system_disk_free_bytes": 42 * 2**30,
+    }
+    assert client.post("/diagnostics", json=metrics).json()["metrics"]["inventory"] is None
+
+    inventory = {
+        "cpu": "Procesador de prueba",
+        "architecture": "x64",
+        "secure_boot": False,
+        "modules": [{"capacity": 16 * 2**30}],
+        "update_status": "complete",
+        "update_count": 1,
+        "pending_updates": [{"title": "Actualización de prueba", "kb": "KB1234567"}],
+    }
+    response = client.post("/diagnostics", json={**metrics, "inventory": inventory})
+    assert response.status_code == 201
+    saved = client.get("/diagnostics/latest").json()["metrics"]["inventory"]
+    assert saved["secure_boot"] is False
+    assert saved["pending_updates"][0]["kb"] == "KB1234567"
+    assert client.post(
+        "/diagnostics", json={**metrics, "inventory": {**inventory, "serial_number": "example"}}
+    ).status_code == 422
