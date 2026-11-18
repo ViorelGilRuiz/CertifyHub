@@ -1,0 +1,13 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #18233b;
+  background: #f1f5f9;
+}
+main { max-width: 52rem; margin: 4rem auto; padding: 0 1.5rem; }
+header { color: #154b51; font-weight: 750; }
+h1 { font-size: clamp(2rem, 6vw, 3.5rem); letter-spacing: -.04em; }
+section { border-radius: 1rem; padding: 1.25rem; background: white; }
+dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: 1rem; }
+dl div { background: #eef6f6; padding: 1rem; border-radius: .5rem; }
+dd { margin: .25rem 0 0; font-size: 1.6rem; font-weight: 700; }
+a { display: inline-block; margin-top: 1rem; color: #125b61; }
