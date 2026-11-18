@@ -9,7 +9,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/Get-CertifyHubInventory.ps1"
-$os = Get-CimInstance -ClassName Win32_OperatingSystem -Property BuildNumber, SystemDrive, TotalVisibleMemorySize, Caption
+$os = Get-CimInstance -ClassName Win32_OperatingSystem -Property BuildNumber, SystemDrive, TotalVisibleMemorySize, Caption, LastBootUpTime, FreePhysicalMemory
 $computer = Get-CimInstance -ClassName Win32_ComputerSystem -Property NumberOfLogicalProcessors, Manufacturer, Model
 $disk = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='$($os.SystemDrive)'" -Property FreeSpace, Size
 if ($null -eq $disk.FreeSpace -or $null -eq $os.TotalVisibleMemorySize) {

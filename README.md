@@ -42,6 +42,18 @@ powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\agent\Invoke-Certify
 
 La búsqueda consulta el servicio de Windows Update configurado en el equipo durante un máximo de 40 segundos. El agente consulta las actualizaciones y el reinicio pendiente sin instalar actualizaciones. El archivo NFO queda local y se abre con MSINFO32. Puede contener identificadores del equipo y datos de red.
 
+### Iniciar un test desde el panel
+
+Deja el agente a la escucha en una ventana de PowerShell y abre el panel web. Pulsa **Iniciar test** cuando veas **Agente conectado**.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy RemoteSigned -File .\agent\Start-CertifyHubAgent.ps1
+```
+
+Si la API usa otro puerto, añade `-PuertoApi <puerto>`. Pulsa Ctrl+C para detener el agente. Este flujo admite un equipo local y un análisis simultáneo. Los estados del análisis se mantienen en la API mientras está en marcha. Los informes completados se guardan en PostgreSQL. El botón **Exportar informe** abre el diálogo de impresión del navegador, que permite guardar como PDF.
+
+La puntuación orientativa combina hasta siete indicadores. Requiere al menos cuatro comprobaciones con resultado conocido y muestra su cobertura. Los datos de seguridad dependen de los permisos de Windows y las capacidades del equipo. La interfaz señala los campos que requieren una prueba adicional.
+
 PostgreSQL inicializa la base y el usuario al crear el volumen por primera vez. La API crea la tabla `diagnostics` al arrancar. El volumen conserva los informes al ejecutar `docker compose down`. Editar las variables de PostgreSQL después de inicializar el volumen requiere cambiar la configuración de la base existente.
 
 ## Arquitectura
@@ -49,6 +61,8 @@ PostgreSQL inicializa la base y el usuario al crear el volumen por primera vez. 
 - `agent/` reúne métricas e inventario mediante CIM, datos de firmware y Windows Update, y los serializa como JSON.
 - `backend/app/` valida el informe, persiste las métricas en PostgreSQL y sirve el estado y el último registro.
 - `frontend/app/` consulta la API desde el servidor Next.js y muestra el informe, el estado inicial o un fallo de conexión.
+- `backend/app/analysis.py` coordina la solicitud, la recogida por el agente y la publicación del informe. `frontend/app/analysis-controls.tsx` muestra ese progreso y actualiza el panel al terminar.
+- `frontend/app/assessment.ts` convierte los hallazgos en puntuación, acciones y servicios sugeridos. `frontend/app/dashboard.tsx` presenta esos resultados junto al inventario.
 - `compose.yaml` conecta los servicios. Los puertos publicados quedan en la interfaz local y PostgreSQL permanece en la red interna de Compose.
 
 El prototipo comparte un único historial local y carece de autenticación. Está pensado para pruebas en un único ordenador. El esquema omite identificadores de equipo y de usuario.

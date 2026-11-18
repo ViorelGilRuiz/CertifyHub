@@ -36,6 +36,7 @@ function Get-CertifyHubInventory {
                 30 { 'LPDDR4' }
                 34 { 'DDR5' }
                 35 { 'LPDDR5' }
+                default { $null }
             }
             @{
                 slot = $_.DeviceLocator
@@ -64,8 +65,32 @@ function Get-CertifyHubInventory {
     })
     $reboot = Read-Optional { [bool](New-Object -ComObject Microsoft.Update.SystemInfo).RebootRequired }
     $updates = if ($BuscarActualizaciones) { Get-CertifyHubUpdates } else { @{ status = 'not_requested'; count = $null; items = @() } }
+    $defender = Read-Optional { (Get-MpComputerStatus -ErrorAction Stop).RealTimeProtectionEnabled }
+    $firewall = @(Read-Optional { Get-NetFirewallProfile -ErrorAction Stop })
+    $encryption = Read-Optional { (Get-BitLockerVolume -MountPoint $Os.SystemDrive -ErrorAction Stop).ProtectionStatus }
+    $bitlocker = if ($encryption -eq 'On') { $true } elseif ($encryption -eq 'Off') { $false } else { $null }
+    $antivirus = $null
+    try {
+        $antivirus = @(Get-CimInstance -Namespace root\SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction Stop |
+            Select-Object -First 12 -ExpandProperty displayName)
+    } catch { }
+    $shutdowns = $null
+    try {
+        $shutdowns = @(Get-WinEvent -FilterHashtable @{
+            LogName = 'System'; ProviderName = 'Microsoft-Windows-Kernel-Power'; Id = 41; StartTime = (Get-Date).AddDays(-7)
+        } -MaxEvents 100 -ErrorAction Stop).Count
+    } catch {
+        if ($_.FullyQualifiedErrorId -like 'NoMatchingEventsFound*') { $shutdowns = 0 }
+    }
+    $diskHealth = switch ([string]$systemPhysical.HealthStatus) {
+        'Healthy' { 'healthy' }
+        'Warning' { 'warning' }
+        'Unhealthy' { 'unhealthy' }
+        default { $null }
+    }
 
     @{
+        device = $env:COMPUTERNAME
         os = $Os.Caption
         release = $release.DisplayVersion
         revision = $release.UBR
@@ -95,6 +120,15 @@ function Get-CertifyHubInventory {
         update_count = $updates.count
         update_status = $updates.status
         reboot_required = $reboot
+        uptime_minutes = $(if ($Os.LastBootUpTime) { [long][Math]::Max(0, ((Get-Date) - $Os.LastBootUpTime).TotalMinutes) } else { $null })
+        cpu_load_percent = $processor.LoadPercentage
+        memory_free = $(if ($null -ne $Os.FreePhysicalMemory) { [long]$Os.FreePhysicalMemory * 1KB } else { $null })
+        unexpected_shutdowns = $shutdowns
+        disk_health = $diskHealth
+        defender_active = $defender
+        firewall_profiles_disabled = $(if ($firewall.Count) { @($firewall | Where-Object Enabled -eq 'False').Count } else { $null })
+        bitlocker_active = $bitlocker
+        antivirus = $antivirus
     }
 }
 

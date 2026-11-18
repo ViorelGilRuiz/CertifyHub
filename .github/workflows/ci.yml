@@ -28,7 +28,7 @@ jobs:
         shell: bash
         run: |
           curl -fsS --retry 20 --retry-connrefused --retry-delay 1 http://localhost:8000/health
-          curl -fsS --retry 20 --retry-connrefused --retry-delay 1 http://localhost:3000/ | grep -F 'primer informe' > /dev/null
+          curl -fsS --retry 20 --retry-connrefused --retry-delay 1 http://localhost:3000/ | grep -F 'Aún no hay ningún informe' > /dev/null
           curl -fsS http://localhost:8000/diagnostics -H 'Content-Type: application/json' \
             -d '{"windows_build":"26100","logical_processors":8,"memory_bytes":17179869184,"system_disk_free_bytes":45097156608,"inventory":{"cpu":"Procesador de prueba","ram_installed":17179869184,"update_status":"complete","update_count":0}}'
           curl -fsS http://localhost:3000/ | grep -F '26100' > /dev/null
@@ -49,6 +49,7 @@ jobs:
         run: |
           $report = powershell -NoProfile -ExecutionPolicy RemoteSigned -File ./agent/Invoke-CertifyHubDiagnostic.ps1 | ConvertFrom-Json
           if (@($report.PSObject.Properties).Count -ne 5 -or -not $report.inventory.cpu -or
+              ($null -ne $report.inventory.bitlocker_active -and $report.inventory.bitlocker_active -isnot [bool]) -or
               $report.windows_build -notmatch '^\d+$' -or $report.logical_processors -lt 1 -or
               $report.memory_bytes -lt 1 -or $report.system_disk_free_bytes -lt 0) {
             throw 'Informe invalido'

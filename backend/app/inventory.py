@@ -31,6 +31,8 @@ class Update(Section):
 
 
 class Inventory(Section):
+    device: Label | None = None
+    customer: Label | None = None
     os: Label | None = None
     release: Label | None = None
     revision: Quantity | None = None
@@ -58,3 +60,12 @@ class Inventory(Section):
     update_count: Quantity | None = None
     update_status: Literal["not_requested", "complete", "partial", "unavailable"] = "not_requested"
     reboot_required: bool | None = None
+    uptime_minutes: Quantity | None = None
+    cpu_load_percent: Annotated[int, Field(ge=0, le=100)] | None = None
+    memory_free: Quantity | None = None
+    unexpected_shutdowns: Quantity | None = None
+    disk_health: Literal["healthy", "warning", "unhealthy"] | None = None
+    defender_active: bool | None = None
+    firewall_profiles_disabled: Quantity | None = None
+    bitlocker_active: bool | None = None
+    antivirus: Annotated[list[Label], Field(max_length=12)] | None = None

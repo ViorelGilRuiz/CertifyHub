@@ -1,11 +1,8 @@
-import { connection } from "next/server";
-import { gibibytes, type Metrics } from "./diagnostic";
-import InventoryReport from "./inventory-report";
+import type { Metrics } from "./diagnostic";
+import AnalysisControls from "./analysis-controls";
+import Dashboard, { navigation } from "./dashboard";
 
-type Report = {
-  received_at: string;
-  metrics: Metrics;
-};
+type Report = { received_at: string; metrics: Metrics };
 
 async function lastReport(): Promise<Report | null> {
   const url = process.env.API_URL ?? "http://127.0.0.1:8000";
@@ -18,39 +15,33 @@ async function lastReport(): Promise<Report | null> {
 }
 
 export default async function Home() {
-  await connection();
   const report = await lastReport().catch(() => undefined);
-  return (
+  const data = report?.metrics.inventory;
+  return <div className="layout">
+    <aside className="sidebar">
+      <a className="brand" href="/"><span aria-hidden="true">C</span> CertifyHub</a>
+      {report && <nav aria-label="Secciones del informe">{navigation.filter(([id]) => data || id !== "actualizaciones").map(([href, label]) =>
+        <a key={href} href={`#${href}`}>{label}</a>
+      )}</nav>}
+    </aside>
     <main>
-      <header className="top"><span>CertifyHub</span><a href="/">Actualizar informe</a></header>
-      <h1>Diagnóstico de Windows</h1>
-      {report === undefined && <p role="status">El servicio de diagnóstico no está disponible.</p>}
-      {report === null && <p>Ejecuta el agente con <code>-Enviar</code> para registrar el primer informe.</p>}
-      {report && (
-        <section className="overview" aria-labelledby="last-report">
-          <h2 id="last-report">Último informe</h2>
-          <dl>
-            <div><dt>Compilación de Windows</dt><dd>{report.metrics.windows_build}{report.metrics.inventory?.revision != null && `.${report.metrics.inventory.revision}`}</dd></div>
-            <div><dt>Procesadores lógicos</dt><dd>{report.metrics.logical_processors}</dd></div>
-            <div><dt>Memoria visible</dt><dd>{gibibytes(report.metrics.memory_bytes)}</dd></div>
-            <div><dt>Espacio libre en disco del sistema</dt><dd>{gibibytes(report.metrics.system_disk_free_bytes)}</dd></div>
-          </dl>
-          <p>Recibido el <time dateTime={report.received_at}>{new Date(report.received_at).toLocaleString("es-ES", { timeZone: "UTC" })} UTC</time></p>
-        </section>
-      )}
-      {report?.metrics.inventory && (
-        <>
-          <nav aria-label="Secciones del informe">
-            <a href="#compatibilidad">Windows 11</a>
-            <a href="#recomendaciones">Recomendaciones</a>
-            <a href="#sistema">Sistema</a>
-            <a href="#hardware">Hardware</a>
-            <a href="#actualizaciones">Actualizaciones</a>
-          </nav>
-          <InventoryReport metrics={report.metrics} data={report.metrics.inventory} />
-        </>
-      )}
-      {report && !report.metrics.inventory && <p>Ejecuta la versión actual del agente para ver el inventario detallado.</p>}
+      <header className="page-header">
+        <div>
+          <h1>Auditoría del equipo</h1>
+          {report && <dl className="metadata">
+            <div><dt>Equipo</dt><dd>{data?.device ?? data?.model ?? "Equipo local"}</dd></div>
+            {data?.customer && <div><dt>Cliente</dt><dd>{data.customer}</dd></div>}
+            <div><dt>Sistema</dt><dd>{data?.os ?? "Windows"}{data?.release ? ` · ${data.release}` : ""}</dd></div>
+            <div><dt>Último análisis</dt><dd><time dateTime={report.received_at}>{new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Madrid" }).format(new Date(report.received_at))}</time></dd></div>
+          </dl>}
+        </div>
+        <AnalysisControls hasReport={Boolean(report)}/>
+      </header>
+      {report ? <Dashboard metrics={report.metrics}/> : <section className="empty panel">
+        <span className="tile-icon" aria-hidden="true">◫</span>
+        <h2>{report === null ? "Aún no hay ningún informe" : "El informe no está disponible"}</h2>
+        <p>{report === null ? "En cuanto se conecte el agente local, pulsa «Iniciar test» para recopilar el inventario y generar las recomendaciones." : "Comprueba que la API y PostgreSQL estén en ejecución y vuelve a cargar la página."}</p>
+      </section>}
     </main>
-  );
+  </div>;
 }

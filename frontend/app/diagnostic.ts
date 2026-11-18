@@ -1,6 +1,8 @@
 export type Update = { title: string; kb?: string | null; date?: string | null };
 
 export type Inventory = {
+  device?: string | null;
+  customer?: string | null;
   os?: string | null;
   release?: string | null;
   revision?: number | null;
@@ -28,6 +30,15 @@ export type Inventory = {
   update_count?: number | null;
   update_status: "not_requested" | "complete" | "partial" | "unavailable";
   reboot_required?: boolean | null;
+  uptime_minutes?: number | null;
+  cpu_load_percent?: number | null;
+  memory_free?: number | null;
+  unexpected_shutdowns?: number | null;
+  disk_health?: "healthy" | "warning" | "unhealthy" | null;
+  defender_active?: boolean | null;
+  firewall_profiles_disabled?: number | null;
+  bitlocker_active?: boolean | null;
+  antivirus?: string[] | null;
 };
 
 export type Metrics = {
@@ -59,27 +70,4 @@ export function compatibility(inventory: Inventory) {
     { name: "TPM 2.0", result: tpm == null ? null : tpm === "2.0" },
     { name: "DirectX 12, WDDM 2.0 y pantalla", result: null },
   ];
-}
-
-export function recommendations(metrics: Metrics, inventory: Inventory) {
-  const { ram_installed, ram_slots, modules, system_volume, system_media, update_status, update_count, reboot_required } = inventory;
-  const free = metrics.system_disk_free_bytes;
-  const memory = ram_installed ?? metrics.memory_bytes;
-  const ram = memory < 16 * GiB
-    ? "Valora llegar a 16 GiB si usas varias aplicaciones a la vez."
-    : "Mantén la capacidad actual para uso general. Valora más RAM si observas saturación sostenida con tu carga habitual.";
-  const slots = ram_slots != null && modules.length > 0 && ram_slots > modules.length
-    ? " El firmware indica posiciones de memoria sin ocupar. Confirma que sean accesibles y revisa el tipo y la capacidad admitidos por el fabricante antes de comprar."
-    : " Consulta el manual del equipo para verificar si admite ampliación, el tipo de módulo y su capacidad máxima.";
-  const disk = free < 25 * GiB || (system_volume && free / system_volume < 0.15)
-    ? "Libera espacio en el volumen del sistema. Si vuelve a llenarse con frecuencia, valora un SSD de mayor capacidad."
-    : "El espacio libre actual es suficiente según los umbrales del informe.";
-  const media = system_media === "HDD"
-    ? " El disco del sistema es mecánico. Cambiarlo por un SSD compatible puede mejorar los tiempos de arranque y carga."
-    : "";
-  const updates = reboot_required ? "Reinicia el equipo cuando puedas guardar tu trabajo y vuelve a comprobar las actualizaciones."
-    : (update_count ?? 0) > 0 ? "Revisa las actualizaciones ofrecidas en Configuración → Windows Update."
-    : update_status !== "complete" ? "Comprueba las actualizaciones en Configuración → Windows Update o repite el informe con la búsqueda activada."
-    : "Windows Update no ofrecía actualizaciones en la última consulta.";
-  return [{ title: "Memoria RAM", text: ram + slots }, { title: "Almacenamiento", text: disk + media }, { title: "Actualizaciones", text: updates }];
 }

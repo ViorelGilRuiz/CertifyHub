@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
 from . import storage
+from .analysis import router as analysis_router
 from .models import Diagnostic
 
 
@@ -24,6 +25,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="CertifyHub", lifespan=lifespan)
+app.include_router(analysis_router)
 
 
 @app.exception_handler(psycopg.OperationalError)

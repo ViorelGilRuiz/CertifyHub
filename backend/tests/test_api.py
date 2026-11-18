@@ -4,7 +4,7 @@ import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
-from app import storage
+from app import analysis, storage
 from app.main import app
 
 
@@ -87,3 +87,38 @@ def test_inventory_is_optional_and_validated(client):
     assert client.post(
         "/diagnostics", json={**metrics, "inventory": {**inventory, "serial_number": "example"}}
     ).status_code == 422
+
+
+def test_agent_runs_one_analysis_and_publishes_report(client, monkeypatch):
+    monkeypatch.setattr(analysis, "job", None)
+    monkeypatch.setattr(analysis, "last_seen", None)
+    monkeypatch.setattr(analysis, "device", None)
+    local = {"X-CertifyHub-Local": "1"}
+    assert client.post("/analysis").status_code == 422
+    assert client.post("/analysis", headers=local).status_code == 409
+    assert client.post("/analysis/claim", headers=local, json={"device": "Equipo-prueba"}).json() is None
+    started = client.post("/analysis", headers=local).json()["job"]
+    assert started["stage"] == "connecting"
+    assert client.post("/analysis", headers=local).json()["job"] == started
+    claim = client.post("/analysis/claim", headers=local, json={"device": "Equipo-prueba"}).json()
+    assert claim["id"] == started["id"]
+    assert client.post("/analysis/claim", headers=local, json={"device": "Equipo-prueba"}).json() is None
+    assert client.get("/analysis").json()["job"]["stage"] == "collecting"
+
+    path = f"/analysis/{started['id']}"
+    headers = {**local, "X-CertifyHub-Lease": claim["lease"]}
+    assert client.post(path + "/progress", headers={**local, "X-CertifyHub-Lease": "incorrecta"}, json={"stage": "evaluating"}).status_code == 409
+    for stage in ["evaluating", "generating"]:
+        assert client.post(path + "/progress", headers=headers, json={"stage": stage}).json()["stage"] == stage
+    metrics = {
+        "windows_build": "26100",
+        "logical_processors": 8,
+        "memory_bytes": 16 * 2**30,
+        "system_disk_free_bytes": 42 * 2**30,
+        "inventory": {"device": "Equipo-prueba", "cpu_load_percent": 42},
+    }
+    saved = client.post(path + "/report", headers=headers, json=metrics)
+    assert saved.status_code == 200
+    assert client.post(path + "/report", headers=headers, json=metrics).status_code == 409
+    assert client.get("/analysis").json()["job"]["stage"] == "completed"
+    assert client.get("/diagnostics/latest").json()["metrics"]["inventory"]["cpu_load_percent"] == 42
